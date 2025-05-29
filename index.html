@@ -196,6 +196,85 @@
             z-index: 50;
             display: none;
         }
+        
+        .temp-control {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            display: none;
+            z-index: 10;
+        }
+        
+        .temp-knob-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 10px auto;
+            cursor: pointer;
+        }
+        
+        .temp-knob {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #444, #666, #888);
+            border: 3px solid #222;
+            position: relative;
+            transform-origin: center;
+            transition: box-shadow 0.1s;
+        }
+        
+        .temp-knob:hover {
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        
+        .temp-knob::before {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 25px;
+            background: #ff4444;
+            border-radius: 2px;
+        }
+        
+        .temp-scale {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            top: -10px;
+            left: -10px;
+            pointer-events: none;
+        }
+        
+        .temp-label {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .temp-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #FFD700;
+            margin-top: 5px;
+        }
+        
+        .cook-time {
+            font-size: 12px;
+            color: #AAA;
+            margin-top: 3px;
+        }
     </style>
 </head>
 <body>
@@ -205,10 +284,10 @@
         <div id="startScreen">
             <h1>PANCAKE FLIPPER</h1>
             <div class="level-selector">
-                <span>Speed Level:</span>
-                <button class="level-btn" onclick="changeSpeed(-1)">-</button>
-                <span id="speedLevel">1</span>
-                <button class="level-btn" onclick="changeSpeed(1)">+</button>
+                <span>Grill Temperature:</span>
+                <button class="level-btn" onclick="changeTemperature(-25)">-</button>
+                <span id="grillTemperature">350°F</span>
+                <button class="level-btn" onclick="changeTemperature(25)">+</button>
             </div>
             <div class="level-selector">
                 <span>Complexity:</span>
@@ -236,6 +315,41 @@
         <div class="bottom-controls" id="bottomControls" style="display: none;">
             <button class="control-btn send" data-action="send">Send Order</button>
             <button class="control-btn pause" data-action="pause">Pause</button>
+        </div>
+        
+        <div class="temp-control" id="tempControl">
+            <div class="temp-label">Grill Temperature</div>
+            <div class="temp-knob-container" id="tempKnobContainer">
+                <div class="temp-knob" id="tempKnob">
+                    <svg class="temp-scale" viewBox="0 0 100 100">
+                        <!-- Temperature scale marks -->
+                        <g stroke="white" stroke-width="1" fill="none">
+                            <!-- 300°F mark -->
+                            <line x1="50" y1="5" x2="50" y2="12" transform="rotate(-60 50 50)" />
+                            <!-- 325°F mark -->
+                            <line x1="50" y1="7" x2="50" y2="12" transform="rotate(-30 50 50)" />
+                            <!-- 350°F mark (center) -->
+                            <line x1="50" y1="5" x2="50" y2="12" transform="rotate(0 50 50)" />
+                            <!-- 375°F mark -->
+                            <line x1="50" y1="7" x2="50" y2="12" transform="rotate(30 50 50)" />
+                            <!-- 400°F mark -->
+                            <line x1="50" y1="7" x2="50" y2="12" transform="rotate(45 50 50)" />
+                            <!-- 425°F mark -->
+                            <line x1="50" y1="7" x2="50" y2="12" transform="rotate(55 50 50)" />
+                            <!-- 450°F mark -->
+                            <line x1="50" y1="5" x2="50" y2="12" transform="rotate(60 50 50)" />
+                        </g>
+                        <!-- Temperature labels -->
+                        <g fill="white" font-size="8" text-anchor="middle">
+                            <text x="35" y="18" transform="rotate(-60 35 18)">300</text>
+                            <text x="50" y="8">350</text>
+                            <text x="65" y="18" transform="rotate(60 65 18)">450</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+            <div class="temp-value" id="tempValue">350°F</div>
+            <div class="cook-time" id="cookTime">Cook: 10.0s</div>
         </div>
         
         <div class="plate-hint" id="plateHint">Click to move pancakes</div>
@@ -271,24 +385,31 @@
         canvas.width = SCREEN_WIDTH;
         canvas.height = SCREEN_HEIGHT;
         
-        // Cooking configuration
+        // Cooking configuration based on temperature
         class CookingConfig {
-            static getCookTimePerfect(speedLevel) {
-                return Math.max(10 - (speedLevel - 1) * 0.9, 2);
+            static getCookTimePerfect(temperature) {
+                // Linear interpolation between temperature points
+                // 300°F = 15s, 350°F = 10s, 450°F = 3s
+                if (temperature <= 300) return 15;
+                if (temperature >= 450) return 3;
+                
+                // Linear interpolation: y = mx + b
+                // From 300°F (15s) to 450°F (3s): slope = (3-15)/(450-300) = -12/150 = -0.08
+                return 15 - 0.08 * (temperature - 300);
             }
             
-            static getCookTimeBurnt(speedLevel) {
-                return this.getCookTimePerfect(speedLevel) + 5;
+            static getCookTimeBurnt(temperature) {
+                return this.getCookTimePerfect(temperature) + 5;
             }
             
-            static getCookTimeAutoToss(speedLevel) {
-                return this.getCookTimePerfect(speedLevel) + 20;
+            static getCookTimeAutoToss(temperature) {
+                return this.getCookTimePerfect(temperature) + 20;
             }
         }
         
         // Pancake class
         class Pancake {
-            constructor(x, y, speedLevel = 1) {
+            constructor(x, y, temperature = 350) {
                 this.x = x;
                 this.y = y;
                 this.width = 60;
@@ -311,11 +432,13 @@
                 this.isAnimating = false;
                 this.rotationAngle = 0; // Current rotation state (0 = normal, π = flipped)
                 this.animationStartRotation = 0; // Rotation at start of animation
-                this.speedLevel = speedLevel;
+                this.temperature = temperature;
+                this.bubbles = []; // Array to store bubble positions
+                this.maxBubbles = 8; // Maximum number of bubbles
                 
-                this.cookTimePerfect = CookingConfig.getCookTimePerfect(speedLevel);
-                this.cookTimeBurnt = CookingConfig.getCookTimeBurnt(speedLevel);
-                this.cookTimeAutoToss = CookingConfig.getCookTimeAutoToss(speedLevel);
+                this.cookTimePerfect = CookingConfig.getCookTimePerfect(temperature);
+                this.cookTimeBurnt = CookingConfig.getCookTimeBurnt(temperature);
+                this.cookTimeAutoToss = CookingConfig.getCookTimeAutoToss(temperature);
             }
             
             update(deltaTime) {
@@ -370,9 +493,33 @@
                 if (this.totalBottomTime < this.cookTimePerfect) {
                     const progress = this.totalBottomTime / this.cookTimePerfect;
                     this.bottomColor = this.interpolateColor(COLORS.LIGHT_TAN, COLORS.GOLDEN_BROWN, progress);
+                    
+                    // Generate bubbles on top as bottom cooks (like real pancakes)
+                    if (this.cookingBottom) {
+                        const desiredBubbles = Math.floor(progress * this.maxBubbles);
+                        while (this.bubbles.length < desiredBubbles) {
+                            this.bubbles.push({
+                                x: Math.random() * (this.width - 10) + 5, // Keep bubbles within pancake bounds
+                                y: Math.random() * (this.height - 6) + 3,
+                                size: Math.random() * 3 + 1 // Bubble size 1-4 pixels
+                            });
+                        }
+                    }
                 } else if (this.totalBottomTime < this.cookTimeBurnt) {
-                    const progress = (this.totalBottomTime - this.cookTimePerfect) / (this.cookTimeBurnt - this.cookTimePerfect);
+                    const progress = (this.totalBottomTime - this.cookTimeBurnt) / (this.cookTimeBurnt - this.cookTimePerfect);
                     this.bottomColor = this.interpolateColor(COLORS.GOLDEN_BROWN, COLORS.BURNT, progress);
+                    
+                    // Keep all bubbles when bottom is perfectly cooked
+                    if (this.cookingBottom) {
+                        const desiredBubbles = this.maxBubbles;
+                        while (this.bubbles.length < desiredBubbles) {
+                            this.bubbles.push({
+                                x: Math.random() * (this.width - 10) + 5,
+                                y: Math.random() * (this.height - 6) + 3,
+                                size: Math.random() * 3 + 1
+                            });
+                        }
+                    }
                 } else {
                     this.bottomColor = COLORS.BURNT;
                 }
@@ -434,6 +581,9 @@
                 this.cookingBottom = !this.cookingBottom;
                 this.flipped = !this.flipped;
                 
+                // Clear bubbles when flipping (they would be on the bottom now)
+                this.bubbles = [];
+
                 // Reset flash states
                 this.wellCookedFlash = false;
                 this.burntFlash = false;
@@ -480,45 +630,56 @@
                 // Draw pancake layers (relative to center)
                 const relativeX = -this.width / 2;
                 const relativeY = -this.height / 2;
-                
+
                 // Determine which side is facing down based on rotation
-                // At 0° rotation: normal (bottom cooking), at 180° rotation: flipped (top cooking)
                 const normalizedRotation = this.rotationAngle % (2 * Math.PI);
                 const isVisuallyFlipped = normalizedRotation > Math.PI/2 && normalizedRotation < 3*Math.PI/2;
-                
-                // The side that appears on bottom should match what's currently cooking
-                let bottomSideColor, topSideColor;
-                
-                if (this.cookingBottom) {
-                    // Bottom is cooking - show bottom color on the down-facing side
-                    if (isVisuallyFlipped) {
-                        // Pancake is upside down, so bottom color appears on top visually
-                        bottomSideColor = this.topColor;
-                        topSideColor = this.bottomColor;
-                    } else {
-                        // Pancake is right-side up, bottom color appears on bottom
-                        bottomSideColor = this.bottomColor;
-                        topSideColor = this.topColor;
-                    }
+
+                // Determine which layer should be drawn on top and colors
+                let bottomLayerColor, topLayerColor;
+                let bottomLayerY, topLayerY;
+
+                if (isVisuallyFlipped) {
+                    // Pancake is upside down - what was originally the top is now on bottom
+                    bottomLayerColor = this.topColor;
+                    topLayerColor = this.bottomColor;
+                    bottomLayerY = relativeY;
+                    topLayerY = relativeY - 2; // Small 2px offset
                 } else {
-                    // Top is cooking - show top color on the down-facing side
-                    if (isVisuallyFlipped) {
-                        // Pancake is upside down, so top color appears on top visually
-                        bottomSideColor = this.bottomColor;
-                        topSideColor = this.topColor;
-                    } else {
-                        // Pancake is right-side up, top color appears on bottom
-                        bottomSideColor = this.topColor;
-                        topSideColor = this.bottomColor;
-                    }
+                    // Pancake is right-side up - bottom on bottom, top on top
+                    bottomLayerColor = this.bottomColor;
+                    topLayerColor = this.topColor;
+                    bottomLayerY = relativeY;
+                    topLayerY = relativeY - 2; // Small 2px offset
                 }
-                
-                ctx.fillStyle = bottomSideColor;
-                this.drawEllipse(ctx, relativeX, relativeY, this.width, this.height);
-                
-                ctx.fillStyle = topSideColor;
-                this.drawEllipse(ctx, relativeX, relativeY - 8, this.width, this.height);
-                
+
+                // Draw bottom layer first
+                ctx.fillStyle = bottomLayerColor;
+                this.drawEllipse(ctx, relativeX, bottomLayerY, this.width, this.height);
+
+                // Draw top layer second (so it appears on top)
+                ctx.fillStyle = topLayerColor;
+                this.drawEllipse(ctx, relativeX, topLayerY, this.width, this.height);
+
+                // Draw bubbles on the visible top surface (only when bottom is cooking and not flipped, or when flipped and top was cooking)
+                const showBubbles = (!isVisuallyFlipped && this.cookingBottom) || (isVisuallyFlipped && !this.cookingBottom);
+                if (showBubbles && !this.finished && this.bubbles.length > 0) {
+                    // Draw bubbles with slight transparency and shadow
+                    this.bubbles.forEach(bubble => {
+                        // Bubble shadow
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                        ctx.beginPath();
+                        ctx.arc(relativeX + bubble.x + 0.5, topLayerY + bubble.y + 0.5, bubble.size, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // Bubble highlight
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.beginPath();
+                        ctx.arc(relativeX + bubble.x, topLayerY + bubble.y, bubble.size, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+
                 // Draw toppings (also relative to center)
                 this.drawToppings(ctx, relativeX, relativeY);
                 
@@ -614,9 +775,9 @@
         
         // Order class
         class Order {
-            constructor(speedLevel = 1, complexityLevel = 1) {
+            constructor(temperature = 350, complexityLevel = 1) {
                 this.plates = [];
-                this.speedLevel = speedLevel;
+                this.temperature = temperature;
                 this.complexityLevel = complexityLevel;
                 this.orderTimeLimit = 0;
                 this.startTime = Date.now();
@@ -663,10 +824,10 @@
                     this.plates.push(plate);
                 }
                 
-                // Calculate time limit
-                const cookTime = CookingConfig.getCookTimePerfect(this.speedLevel);
-                const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
-                const timeMultiplier = Math.max(6 - (this.speedLevel - 1) * 0.4, 2);
+                // Calculate time limit based on fixed 8-second cook time
+                const fixedCookTime = 8; // Fixed cook time for time calculations
+                const baseTime = (totalPancakes * 3 + fixedCookTime * 2) * (1 + totalPancakes / 16);
+                const timeMultiplier = 4; // Fixed time multiplier (was based on speed level)
                 this.orderTimeLimit = Math.floor(baseTime * timeMultiplier * 1000); // Convert to milliseconds
             }
             
@@ -729,7 +890,7 @@
             grillSpots: Array(4).fill(null).map(() => Array(4).fill(null)),
             selectedRow: 0,
             selectedCol: 0,
-            speedLevel: 1,
+            grillTemperature: 350, // Temperature in Fahrenheit (300-450)
             complexityLevel: 1,
             currentOrder: null,
             plates: Array(4).fill(null).map(() => []), // Reduced to 4 plates
@@ -759,6 +920,115 @@
         const DOUBLE_CLICK_THRESHOLD = 300; // milliseconds
         const DOUBLE_CLICK_DISTANCE = 20; // pixels
         
+        // Temperature knob control variables
+        let isAdjustingTemp = false;
+        let tempKnobStartAngle = 0;
+        
+        // Convert temperature to knob angle (-60° to +60°, where 0° = 350°F)
+        function tempToAngle(temp) {
+            // 300°F = -60°, 350°F = 0°, 450°F = +60°
+            return (temp - 350) * (120 / 150); // 120° range for 150°F range
+        }
+        
+        // Convert knob angle to temperature
+        function angleToTemp(angle) {
+            // Clamp angle to valid range
+            angle = Math.max(-60, Math.min(60, angle));
+            const temp = 350 + (angle * 150 / 120);
+            // Round to nearest 25°F increment
+            return Math.round(temp / 25) * 25;
+        }
+        
+        // Get angle from center point to mouse/touch position
+        function getAngleFromCenter(centerX, centerY, pointX, pointY) {
+            const deltaX = pointX - centerX;
+            const deltaY = pointY - centerY;
+            let angle = Math.atan2(deltaX, -deltaY) * (180 / Math.PI);
+            return angle;
+        }
+        
+        // Update temperature knob display
+        function updateTempKnob() {
+            const knob = document.getElementById('tempKnob');
+            const tempValue = document.getElementById('tempValue');
+            const cookTime = document.getElementById('cookTime');
+            
+            const angle = tempToAngle(gameState.grillTemperature);
+            knob.style.transform = `rotate(${angle}deg)`;
+            tempValue.textContent = `${gameState.grillTemperature}°F`;
+            
+            const actualCookTime = CookingConfig.getCookTimePerfect(gameState.grillTemperature);
+            cookTime.textContent = `Cook: ${actualCookTime.toFixed(1)}s`;
+        }
+        
+        // Temperature knob event handlers
+        function handleTempKnobStart(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (gameState.state !== 'playing') return;
+            
+            isAdjustingTemp = true;
+            tempKnobStartAngle = tempToAngle(gameState.grillTemperature);
+            
+            // Prevent other touch handling
+            touchHandled = true;
+            setTimeout(() => {
+                touchHandled = false;
+            }, 100);
+        }
+        
+        function handleTempKnobMove(e) {
+            if (!isAdjustingTemp || gameState.state !== 'playing') return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const knobContainer = document.getElementById('tempKnobContainer');
+            const rect = knobContainer.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let clientX, clientY;
+            if (e.touches && e.touches[0]) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            
+            const angle = getAngleFromCenter(centerX, centerY, clientX, clientY);
+            const newTemp = angleToTemp(angle);
+            
+            if (newTemp !== gameState.grillTemperature) {
+                gameState.grillTemperature = Math.max(300, Math.min(450, newTemp));
+                updateTempKnob();
+                
+                // Update cooking times for all existing pancakes
+                for (let row = 0; row < 4; row++) {
+                    for (let col = 0; col < 4; col++) {
+                        const pancake = gameState.grillSpots[row][col];
+                        if (pancake) {
+                            pancake.temperature = gameState.grillTemperature;
+                            pancake.cookTimePerfect = CookingConfig.getCookTimePerfect(gameState.grillTemperature);
+                            pancake.cookTimeBurnt = CookingConfig.getCookTimeBurnt(gameState.grillTemperature);
+                            pancake.cookTimeAutoToss = CookingConfig.getCookTimeAutoToss(gameState.grillTemperature);
+                        }
+                    }
+                }
+            }
+        }
+        
+        function handleTempKnobEnd(e) {
+            if (!isAdjustingTemp) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            isAdjustingTemp = false;
+        }
+        
         // Add event listeners for control buttons
         function initializeControlButtons() {
             // Control buttons
@@ -775,9 +1045,25 @@
             canvas.addEventListener('touchmove', handleCanvasTouchMove, {passive: false});
             canvas.addEventListener('touchend', handleCanvasTouchEnd, {passive: false});
             canvas.addEventListener('click', handleCanvasClick);
+            
+            // Temperature knob controls
+            const tempKnobContainer = document.getElementById('tempKnobContainer');
+            
+            // Touch events for mobile
+            tempKnobContainer.addEventListener('touchstart', handleTempKnobStart, {passive: false});
+            document.addEventListener('touchmove', handleTempKnobMove, {passive: false});
+            document.addEventListener('touchend', handleTempKnobEnd, {passive: false});
+            
+            // Mouse events for desktop
+            tempKnobContainer.addEventListener('mousedown', handleTempKnobStart);
+            document.addEventListener('mousemove', handleTempKnobMove);
+            document.addEventListener('mouseup', handleTempKnobEnd);
         }
         
         function handleCanvasTouchStart(e) {
+            // Don't handle canvas touches if adjusting temperature
+            if (isAdjustingTemp) return;
+            
             e.preventDefault();
             
             if (gameState.state !== 'playing') return;
@@ -800,6 +1086,9 @@
         }
         
         function handleCanvasTouchMove(e) {
+            // Don't handle canvas touches if adjusting temperature
+            if (isAdjustingTemp) return;
+            
             e.preventDefault();
             
             if (gameState.state !== 'playing') return;
@@ -822,6 +1111,9 @@
         }
         
         function handleCanvasTouchEnd(e) {
+            // Don't handle canvas touches if adjusting temperature
+            if (isAdjustingTemp) return;
+            
             e.preventDefault();
             
             if (gameState.state !== 'playing') return;
@@ -859,6 +1151,9 @@
         }
         
         function handleCanvasClick(e) {
+            // Don't handle canvas clicks if adjusting temperature
+            if (isAdjustingTemp) return;
+            
             if (gameState.state !== 'playing') return;
             
             const rect = canvas.getBoundingClientRect();
@@ -1032,7 +1327,7 @@
                         // Pour batter - only function of this button now
                         const x = gameState.grillStartX + col * (gameState.spotSize + gameState.spotSpacing) + 10;
                         const y = gameState.grillY + row * (gameState.spotSize + gameState.spotSpacing) + 20;
-                        gameState.grillSpots[row][col] = new Pancake(x, y, gameState.speedLevel);
+                        gameState.grillSpots[row][col] = new Pancake(x, y, gameState.grillTemperature);
                     }
                     // Note: Flip functionality moved to drag gesture
                     break;
@@ -1092,15 +1387,15 @@
             document.getElementById('startScreen').style.display = 'flex';
             document.getElementById('leftControls').style.display = 'none';
             document.getElementById('bottomControls').style.display = 'none';
+            document.getElementById('tempControl').style.display = 'none';
         }
         
         function sendOrder() {
             const orderCompletionTime = (Date.now() - gameState.currentOrder.startTime) / 1000;
             
-            // Calculate bonus threshold
-            const cookTime = CookingConfig.getCookTimePerfect(gameState.speedLevel);
+            // Calculate bonus threshold based on fixed 8-second cook time
             const totalPancakes = gameState.currentOrder.plates.reduce((sum, plate) => sum + plate.length, 0);
-            const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
+            const baseTime = (totalPancakes * 3 + 8 * 2) * (1 + totalPancakes / 16); // Fixed 8s cook time
             const timeBonusThreshold = baseTime * 1.5;
             
             let wasOutstanding = false;
@@ -1131,13 +1426,13 @@
             // Clear plates and generate new order with level progression
             gameState.plates = Array(4).fill(null).map(() => []);
             
-            // Only increase difficulty if the order was outstanding (perfect)
+            // Only increase complexity difficulty if the order was outstanding (perfect)
+            // Temperature stays constant throughout the game
             if (wasOutstanding) {
-                gameState.speedLevel = Math.min(gameState.speedLevel + Math.floor(gameState.perfectOrders / 2), 10);
                 gameState.complexityLevel = Math.min(gameState.complexityLevel + Math.floor(gameState.perfectOrders / 3), 10);
             }
             
-            gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+            gameState.currentOrder = new Order(gameState.grillTemperature, gameState.complexityLevel);
         }
         
         function calculateMaxPossibleScore() {
@@ -1252,9 +1547,9 @@
         }
         
         // Start screen functions
-        function changeSpeed(delta) {
-            gameState.speedLevel = Math.max(1, Math.min(10, gameState.speedLevel + delta));
-            document.getElementById('speedLevel').textContent = gameState.speedLevel;
+        function changeTemperature(delta) {
+            gameState.grillTemperature = Math.max(300, Math.min(450, gameState.grillTemperature + delta));
+            document.getElementById('grillTemperature').textContent = gameState.grillTemperature + '°F';
         }
         
         function changeComplexity(delta) {
@@ -1270,14 +1565,18 @@
             gameState.totalOrders = 0;
             gameState.ordersFailed = 0;
             gameState.perfectOrders = 0;
-            gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+            gameState.currentOrder = new Order(gameState.grillTemperature, gameState.complexityLevel);
             
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('leftControls').style.display = 'flex';
             document.getElementById('bottomControls').style.display = 'flex';
+            document.getElementById('tempControl').style.display = 'block';
             
             // Initialize control button listeners
             initializeControlButtons();
+            
+            // Initialize temperature knob display
+            updateTempKnob();
         }
         
         // Game update loop
@@ -1301,7 +1600,7 @@
                 gameState.score -= 10;
                 gameState.plates = Array(4).fill(null).map(() => []); // Changed to 4 plates
                 // Don't increase difficulty on failure
-                gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+                gameState.currentOrder = new Order(gameState.grillTemperature, gameState.complexityLevel);
             }
             
             // Update outstanding flash
@@ -1492,7 +1791,7 @@
             ctx.fillText(`Perfect: ${gameState.perfectOrders}`, uiX, uiY);
             
             uiY += 25;
-            ctx.fillText(`Speed: ${gameState.speedLevel}`, uiX, uiY);
+            ctx.fillText(`Grill: ${gameState.grillTemperature}°F`, uiX, uiY);
             
             uiY += 25;
             ctx.fillText(`Complex: ${gameState.complexityLevel}`, uiX, uiY);
@@ -1506,10 +1805,9 @@
             const timeRemaining = gameState.currentOrder.getRemainingTime() / 1000;
             const orderCompletionTime = (Date.now() - gameState.currentOrder.startTime) / 1000;
             
-            // Calculate bonus threshold
-            const cookTime = CookingConfig.getCookTimePerfect(gameState.speedLevel);
+            // Calculate bonus threshold based on fixed 8-second cook time
             const totalPancakes = gameState.currentOrder.plates.reduce((sum, plate) => sum + plate.length, 0);
-            const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
+            const baseTime = (totalPancakes * 3 + 8 * 2) * (1 + totalPancakes / 16); // Fixed 8s cook time
             const timeBonusThreshold = baseTime * 1.5;
             
             let timeColor = COLORS.WHITE;
@@ -1527,7 +1825,8 @@
             
             uiY += 25;
             ctx.fillStyle = COLORS.WHITE;
-            ctx.fillText(`Cook: ${CookingConfig.getCookTimePerfect(gameState.speedLevel).toFixed(1)}s`, uiX, uiY);
+            const actualCookTime = CookingConfig.getCookTimePerfect(gameState.grillTemperature);
+            ctx.fillText(`Cook: ${actualCookTime.toFixed(1)}s`, uiX, uiY);
             
             // Draw control instructions
             uiY += 40;
