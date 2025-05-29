@@ -226,7 +226,7 @@
         </div>
         
         <div class="left-controls" id="leftControls" style="display: none;">
-            <button class="control-btn action" data-action="pour">Pour/Flip</button>
+            <button class="control-btn action" data-action="pour">Pour Batter</button>
             <button class="control-btn topping" data-action="blueberry">🫐 Blue</button>
             <button class="control-btn topping" data-action="banana">🍌 Ban</button>
             <button class="control-btn topping" data-action="walnut">🥜 Wal</button>
@@ -309,6 +309,8 @@
                 this.flashTimer = 0;
                 this.flipAnimationTimer = 0;
                 this.isAnimating = false;
+                this.rotationAngle = 0; // Current rotation state (0 = normal, π = flipped)
+                this.animationStartRotation = 0; // Rotation at start of animation
                 this.speedLevel = speedLevel;
                 
                 this.cookTimePerfect = CookingConfig.getCookTimePerfect(speedLevel);
@@ -322,11 +324,19 @@
                 // Update flip animation
                 if (this.isAnimating) {
                     this.flipAnimationTimer += deltaTime;
-                    if (this.flipAnimationTimer >= 0.5) {
+                    
+                    if (this.flipAnimationTimer >= 0.6) {
+                        // Animation complete
                         this.isAnimating = false;
                         this.flipAnimationTimer = 0;
                         this.x = this.originalX;
                         this.y = this.originalY;
+                        // Set final rotation state
+                        this.rotationAngle = this.animationStartRotation + Math.PI;
+                    } else {
+                        // Update rotation angle during animation (smooth transition)
+                        const progress = this.flipAnimationTimer / 0.6;
+                        this.rotationAngle = this.animationStartRotation + (progress * Math.PI);
                     }
                 }
                 
@@ -417,13 +427,24 @@
             }
             
             flip() {
+                // Don't flip if already animating
+                if (this.isAnimating) return;
+                
+                // Do the logical flip immediately
                 this.cookingBottom = !this.cookingBottom;
                 this.flipped = !this.flipped;
+                
+                // Reset flash states
                 this.wellCookedFlash = false;
                 this.burntFlash = false;
                 this.flashTimer = 0;
+                
+                // Start visual animation
                 this.isAnimating = true;
                 this.flipAnimationTimer = 0;
+                
+                // Store the current rotation as the starting point for this flip
+                this.animationStartRotation = this.rotationAngle;
             }
             
             addTopping(topping) {
@@ -438,22 +459,73 @@
                 let drawY = this.y;
                 
                 if (this.isAnimating) {
-                    const bounceOffset = Math.floor(10 * Math.abs(2 * (this.flipAnimationTimer / 0.5) - 1));
-                    drawX = this.originalX + bounceOffset;
+                    const progress = this.flipAnimationTimer / 0.6;
+                    // Bounce effect during flip
+                    const bounceOffset = Math.sin(progress * Math.PI) * 15;
+                    drawX = this.originalX;
                     drawY = this.originalY - bounceOffset;
                 }
                 
-                // Draw pancake layers
-                ctx.fillStyle = this.flipped ? this.topColor : this.bottomColor;
-                this.drawEllipse(ctx, drawX, drawY, this.width, this.height);
+                // Save context for rotation
+                ctx.save();
                 
-                ctx.fillStyle = this.flipped ? this.bottomColor : this.topColor;
-                this.drawEllipse(ctx, drawX, drawY - 8, this.width, this.height);
+                // Move to pancake center for rotation
+                const centerX = drawX + this.width / 2;
+                const centerY = drawY + this.height / 2;
+                ctx.translate(centerX, centerY);
                 
-                // Draw toppings
-                this.drawToppings(ctx, drawX, drawY);
+                // Apply current rotation
+                ctx.rotate(this.rotationAngle);
                 
-                // Draw flash indicators
+                // Draw pancake layers (relative to center)
+                const relativeX = -this.width / 2;
+                const relativeY = -this.height / 2;
+                
+                // Determine which side is facing down based on rotation
+                // At 0° rotation: normal (bottom cooking), at 180° rotation: flipped (top cooking)
+                const normalizedRotation = this.rotationAngle % (2 * Math.PI);
+                const isVisuallyFlipped = normalizedRotation > Math.PI/2 && normalizedRotation < 3*Math.PI/2;
+                
+                // The side that appears on bottom should match what's currently cooking
+                let bottomSideColor, topSideColor;
+                
+                if (this.cookingBottom) {
+                    // Bottom is cooking - show bottom color on the down-facing side
+                    if (isVisuallyFlipped) {
+                        // Pancake is upside down, so bottom color appears on top visually
+                        bottomSideColor = this.topColor;
+                        topSideColor = this.bottomColor;
+                    } else {
+                        // Pancake is right-side up, bottom color appears on bottom
+                        bottomSideColor = this.bottomColor;
+                        topSideColor = this.topColor;
+                    }
+                } else {
+                    // Top is cooking - show top color on the down-facing side
+                    if (isVisuallyFlipped) {
+                        // Pancake is upside down, so top color appears on top visually
+                        bottomSideColor = this.bottomColor;
+                        topSideColor = this.topColor;
+                    } else {
+                        // Pancake is right-side up, top color appears on bottom
+                        bottomSideColor = this.topColor;
+                        topSideColor = this.bottomColor;
+                    }
+                }
+                
+                ctx.fillStyle = bottomSideColor;
+                this.drawEllipse(ctx, relativeX, relativeY, this.width, this.height);
+                
+                ctx.fillStyle = topSideColor;
+                this.drawEllipse(ctx, relativeX, relativeY - 8, this.width, this.height);
+                
+                // Draw toppings (also relative to center)
+                this.drawToppings(ctx, relativeX, relativeY);
+                
+                // Restore context
+                ctx.restore();
+                
+                // Draw flash indicators (not rotated, so draw separately)
                 this.drawFlashIndicators(ctx, drawX, drawY);
             }
             
@@ -675,21 +747,193 @@
             pausedTime: 0 // Track time spent paused
         };
         
-        // Touch handling for control buttons
+        // Touch handling for control buttons and drag gestures
         let touchHandled = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let isDragging = false;
+        let dragStartTime = 0;
+        let lastClickTime = 0;
+        let lastClickX = 0;
+        let lastClickY = 0;
+        const DOUBLE_CLICK_THRESHOLD = 300; // milliseconds
+        const DOUBLE_CLICK_DISTANCE = 20; // pixels
         
         // Add event listeners for control buttons
         function initializeControlButtons() {
+            // Control buttons
             const buttons = document.querySelectorAll('.control-btn[data-action]');
             buttons.forEach(button => {
-                // Remove any existing listeners
                 button.removeEventListener('touchstart', handleButtonTouch);
                 button.removeEventListener('click', handleButtonClick);
-                
-                // Add new listeners
                 button.addEventListener('touchstart', handleButtonTouch, {passive: false});
                 button.addEventListener('click', handleButtonClick);
             });
+            
+            // Canvas drag gestures and clicks
+            canvas.addEventListener('touchstart', handleCanvasTouchStart, {passive: false});
+            canvas.addEventListener('touchmove', handleCanvasTouchMove, {passive: false});
+            canvas.addEventListener('touchend', handleCanvasTouchEnd, {passive: false});
+            canvas.addEventListener('click', handleCanvasClick);
+        }
+        
+        function handleCanvasTouchStart(e) {
+            e.preventDefault();
+            
+            if (gameState.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) * scaleX;
+            const y = (touch.clientY - rect.top) * scaleY;
+            
+            dragStartX = x;
+            dragStartY = y;
+            dragStartTime = Date.now();
+            isDragging = false;
+            
+            // Check if starting on grill for potential pancake selection
+            selectGrillSpotAt(x, y);
+        }
+        
+        function handleCanvasTouchMove(e) {
+            e.preventDefault();
+            
+            if (gameState.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) * scaleX;
+            const y = (touch.clientY - rect.top) * scaleY;
+            
+            const deltaX = x - dragStartX;
+            const deltaY = y - dragStartY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            if (distance > 10) { // Minimum drag distance
+                isDragging = true;
+            }
+        }
+        
+        function handleCanvasTouchEnd(e) {
+            e.preventDefault();
+            
+            if (gameState.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const changedTouch = e.changedTouches[0];
+            const x = (changedTouch.clientX - rect.left) * scaleX;
+            const y = (changedTouch.clientY - rect.top) * scaleY;
+            
+            const deltaX = x - dragStartX;
+            const deltaY = y - dragStartY;
+            const dragTime = Date.now() - dragStartTime;
+            
+            if (isDragging && dragTime < 1000) { // Must complete drag within 1 second
+                // Check for upward drag (flip gesture)
+                if (deltaY < -30 && Math.abs(deltaX) < 50) { // Dragged up at least 30px, not too much sideways
+                    const pancake = gameState.grillSpots[gameState.selectedRow][gameState.selectedCol];
+                    if (pancake && !pancake.isAnimating) {
+                        pancake.flip();
+                        return; // Don't process as a tap
+                    }
+                }
+            }
+            
+            // If not a drag gesture, handle as a tap
+            if (!isDragging) {
+                handleCanvasTap(x, y);
+            }
+            
+            // Reset drag state
+            isDragging = false;
+        }
+        
+        function handleCanvasClick(e) {
+            if (gameState.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            const currentTime = Date.now();
+            
+            // Check for double-click on grill spots
+            if (currentTime - lastClickTime < DOUBLE_CLICK_THRESHOLD) {
+                const distance = Math.sqrt(
+                    Math.pow(x - lastClickX, 2) + Math.pow(y - lastClickY, 2)
+                );
+                
+                if (distance < DOUBLE_CLICK_DISTANCE) {
+                    // Double-click detected - try to flip pancake
+                    if (selectGrillSpotAt(x, y)) {
+                        const pancake = gameState.grillSpots[gameState.selectedRow][gameState.selectedCol];
+                        if (pancake && !pancake.isAnimating) {
+                            pancake.flip();
+                            return; // Don't process as regular click
+                        }
+                    }
+                }
+            }
+            
+            // Store click info for double-click detection
+            lastClickTime = currentTime;
+            lastClickX = x;
+            lastClickY = y;
+            
+            // Process as regular tap/click
+            handleCanvasTap(x, y);
+        }
+        
+        function selectGrillSpotAt(x, y) {
+            const grillStartX = gameState.grillStartX;
+            const grillY = gameState.grillY;
+            const spotSize = gameState.spotSize;
+            const spotSpacing = gameState.spotSpacing;
+            
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const spotX = grillStartX + col * (spotSize + spotSpacing);
+                    const spotY = grillY + row * (spotSize + spotSpacing);
+                    
+                    if (x >= spotX && x <= spotX + spotSize && 
+                        y >= spotY && y <= spotY + spotSize) {
+                        gameState.selectedRow = row;
+                        gameState.selectedCol = col;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function handleCanvasTap(x, y) {
+            // Check if tap is on grill
+            if (selectGrillSpotAt(x, y)) {
+                return; // Just select the spot, don't do anything else
+            }
+            
+            // Check if tap is on plate areas
+            const platesY = 480;
+            for (let plateNum = 0; plateNum < 4; plateNum++) {
+                const plateX = 50 + plateNum * 180;
+                if (x >= plateX && x <= plateX + 170 && y >= platesY && y <= platesY + 100) {
+                    handlePlateClick(plateNum);
+                    return;
+                }
+            }
         }
         
         function handleButtonTouch(e) {
@@ -719,11 +963,8 @@
             }
         }
         
-        // Canvas touch handling
-        canvas.addEventListener('touchstart', handleCanvasTouch, {passive: false});
-        canvas.addEventListener('click', handleCanvasTouch);
-        
         function handleCanvasTouch(e) {
+            // This function is kept for backwards compatibility but main logic moved to drag handlers
             e.preventDefault();
             
             if (gameState.state !== 'playing') return;
@@ -744,37 +985,7 @@
             const x = (clientX - rect.left) * scaleX;
             const y = (clientY - rect.top) * scaleY;
             
-            // Check if touch is on grill
-            const grillStartX = gameState.grillStartX;
-            const grillY = gameState.grillY;
-            const spotSize = gameState.spotSize;
-            const spotSpacing = gameState.spotSpacing;
-            
-            for (let row = 0; row < 4; row++) {
-                for (let col = 0; col < 4; col++) {
-                    const spotX = grillStartX + col * (spotSize + spotSpacing);
-                    const spotY = grillY + row * (spotSize + spotSpacing);
-                    
-                    if (x >= spotX && x <= spotX + spotSize && 
-                        y >= spotY && y <= spotY + spotSize) {
-                        // Select this grill spot
-                        gameState.selectedRow = row;
-                        gameState.selectedCol = col;
-                        selectedGrillSpot = {row, col};
-                        return;
-                    }
-                }
-            }
-            
-            // Check if touch is on plate areas (now clickable for interaction)
-            const platesY = 480; // Adjusted position
-            for (let plateNum = 0; plateNum < 4; plateNum++) { // Changed to 4 plates
-                const plateX = 50 + plateNum * 180; // Adjusted spacing for 4 plates
-                if (x >= plateX && x <= plateX + 170 && y >= platesY && y <= platesY + 100) {
-                    handlePlateClick(plateNum);
-                    return;
-                }
-            }
+            handleCanvasTap(x, y);
         }
         
         function handlePlateClick(plateNum) {
@@ -818,14 +1029,12 @@
             switch (action) {
                 case 'pour':
                     if (pancake === null) {
-                        // Pour batter
+                        // Pour batter - only function of this button now
                         const x = gameState.grillStartX + col * (gameState.spotSize + gameState.spotSpacing) + 10;
                         const y = gameState.grillY + row * (gameState.spotSize + gameState.spotSpacing) + 20;
                         gameState.grillSpots[row][col] = new Pancake(x, y, gameState.speedLevel);
-                    } else {
-                        // Flip pancake
-                        pancake.flip();
                     }
+                    // Note: Flip functionality moved to drag gesture
                     break;
                     
                 case 'blueberry':
@@ -1319,6 +1528,14 @@
             uiY += 25;
             ctx.fillStyle = COLORS.WHITE;
             ctx.fillText(`Cook: ${CookingConfig.getCookTimePerfect(gameState.speedLevel).toFixed(1)}s`, uiX, uiY);
+            
+            // Draw control instructions
+            uiY += 40;
+            ctx.fillStyle = COLORS.OUTSTANDING_GOLD;
+            ctx.font = '14px Arial';
+            ctx.fillText('Touch: Drag ↑ to flip', uiX, uiY);
+            uiY += 18;
+            ctx.fillText('Mouse: Double-click to flip', uiX, uiY);
         }
         
         // Initialize game
