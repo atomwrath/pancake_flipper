@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pancake Flipper</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        
+        canvas {
+            border: 1px solid #333;
+            touch-action: none;
+        }
+        
+        .left-controls {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .bottom-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            touch-action: manipulation;
+            cursor: pointer;
+            user-select: none;
+            backdrop-filter: blur(5px);
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+        
+        .control-btn.action {
+            background: rgba(34, 139, 34, 0.3);
+            border-color: rgba(34, 139, 34, 0.5);
+        }
+        
+        .control-btn.topping {
+            background: rgba(255, 165, 0, 0.3);
+            border-color: rgba(255, 165, 0, 0.5);
+        }
+        
+        .control-btn.danger {
+            background: rgba(255, 0, 0, 0.3);
+            border-color: rgba(255, 0, 0, 0.5);
+        }
+        
+        .control-btn.send {
+            background: rgba(70, 130, 180, 0.3);
+            border-color: rgba(70, 130, 180, 0.5);
+            font-size: 16px;
+            padding: 15px 25px;
+        }
+        
+        .control-btn.pause {
+            background: rgba(255, 255, 0, 0.3);
+            border-color: rgba(255, 255, 0, 0.5);
+        }
+        
+        @media (max-width: 768px) {
+            .control-btn {
+                padding: 14px 18px;
+                font-size: 16px;
+                min-width: 90px;
+            }
+            
+            .left-controls {
+                left: 5px;
+            }
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+        }
+        
+        #pauseScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 200;
+        }
+        
+        #startScreen h1, #pauseScreen h1 {
+            color: #FFD700;
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .level-selector {
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .level-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+        .level-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .start-btn {
+            background: rgba(34, 139, 34, 0.5);
+            border: 2px solid rgba(34, 139, 34, 0.7);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 24px;
+            margin-top: 30px;
+            cursor: pointer;
+        }
+        
+        .start-btn:active {
+            background: rgba(34, 139, 34, 0.7);
+        }
+        
+        .plate-hint {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #FFD700;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="startScreen">
+            <h1>PANCAKE FLIPPER</h1>
+            <div class="level-selector">
+                <span>Speed Level:</span>
+                <button class="level-btn" onclick="changeSpeed(-1)">-</button>
+                <span id="speedLevel">1</span>
+                <button class="level-btn" onclick="changeSpeed(1)">+</button>
+            </div>
+            <div class="level-selector">
+                <span>Complexity:</span>
+                <button class="level-btn" onclick="changeComplexity(-1)">-</button>
+                <span id="complexityLevel">1</span>
+                <button class="level-btn" onclick="changeComplexity(1)">+</button>
+            </div>
+            <button class="start-btn" onclick="startGame()">START GAME</button>
+        </div>
+        
+        <div id="pauseScreen">
+            <h1>PAUSED</h1>
+            <button class="start-btn" onclick="resumeGame()">RESUME</button>
+            <button class="start-btn" onclick="returnToMenu()" style="margin-top: 20px; background: rgba(255, 0, 0, 0.5); border-color: rgba(255, 0, 0, 0.7);">MAIN MENU</button>
+        </div>
+        
+        <div class="left-controls" id="leftControls" style="display: none;">
+            <button class="control-btn action" ontouchstart="handleTouch('pour')" onclick="handleTouch('pour')">Pour/Flip</button>
+            <button class="control-btn topping" ontouchstart="handleTouch('blueberry')" onclick="handleTouch('blueberry')">🫐 Blue</button>
+            <button class="control-btn topping" ontouchstart="handleTouch('banana')" onclick="handleTouch('banana')">🍌 Ban</button>
+            <button class="control-btn topping" ontouchstart="handleTouch('walnut')" onclick="handleTouch('walnut')">🥜 Wal</button>
+            <button class="control-btn danger" ontouchstart="handleTouch('toss')" onclick="handleTouch('toss')">Toss</button>
+        </div>
+        
+        <div class="bottom-controls" id="bottomControls" style="display: none;">
+            <button class="control-btn send" ontouchstart="handleTouch('send')" onclick="handleTouch('send')">Send Order</button>
+            <button class="control-btn pause" ontouchstart="handleTouch('pause')" onclick="handleTouch('pause')">Pause</button>
+        </div>
+        
+        <div class="plate-hint" id="plateHint">Click to move pancakes</div>
+    </div>
+
+    <script>
+        // Game constants
+        const SCREEN_WIDTH = Math.min(1000, window.innerWidth);
+        const SCREEN_HEIGHT = Math.min(700, window.innerHeight);
+        const FPS = 60;
+        
+        // Colors
+        const COLORS = {
+            BLACK: '#000000',
+            WHITE: '#FFFFFF',
+            LIGHT_TAN: '#DEB887',
+            GOLDEN_BROWN: '#B8860B',
+            BURNT: '#401008',
+            BLUE: '#4682B4',
+            YELLOW: '#FFFF00',
+            BROWN: '#8B4513',
+            GREEN: '#228B22',
+            GRAY: '#808080',
+            RED: '#FF0000',
+            METAL_GRAY: '#A9A9A9',
+            DARK_METAL: '#696969',
+            OUTSTANDING_GOLD: '#FFD700'
+        };
+        
+        // Initialize canvas
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = SCREEN_WIDTH;
+        canvas.height = SCREEN_HEIGHT;
+        
+        // Cooking configuration
+        class CookingConfig {
+            static getCookTimePerfect(speedLevel) {
+                return Math.max(10 - (speedLevel - 1) * 0.9, 2);
+            }
+            
+            static getCookTimeBurnt(speedLevel) {
+                return this.getCookTimePerfect(speedLevel) + 5;
+            }
+            
+            static getCookTimeAutoToss(speedLevel) {
+                return this.getCookTimePerfect(speedLevel) + 20;
+            }
+        }
+        
+        // Pancake class
+        class Pancake {
+            constructor(x, y, speedLevel = 1) {
+                this.x = x;
+                this.y = y;
+                this.width = 60;
+                this.height = 20;
+                this.originalX = x;
+                this.originalY = y;
+                this.topColor = COLORS.LIGHT_TAN;
+                this.bottomColor = COLORS.LIGHT_TAN;
+                this.toppings = [];
+                this.flipped = false;
+                this.startTime = Date.now();
+                this.totalBottomTime = 0;
+                this.totalTopTime = 0;
+                this.cookingBottom = true;
+                this.finished = false;
+                this.wellCookedFlash = false;
+                this.burntFlash = false;
+                this.flashTimer = 0;
+                this.flipAnimationTimer = 0;
+                this.isAnimating = false;
+                this.speedLevel = speedLevel;
+                
+                this.cookTimePerfect = CookingConfig.getCookTimePerfect(speedLevel);
+                this.cookTimeBurnt = CookingConfig.getCookTimeBurnt(speedLevel);
+                this.cookTimeAutoToss = CookingConfig.getCookTimeAutoToss(speedLevel);
+            }
+            
+            update(deltaTime) {
+                if (this.finished) return null;
+                
+                // Update flip animation
+                if (this.isAnimating) {
+                    this.flipAnimationTimer += deltaTime;
+                    if (this.flipAnimationTimer >= 0.5) {
+                        this.isAnimating = false;
+                        this.flipAnimationTimer = 0;
+                        this.x = this.originalX;
+                        this.y = this.originalY;
+                    }
+                }
+                
+                // Update flash timer
+                this.flashTimer += deltaTime;
+                
+                // Update cooking time
+                if (this.cookingBottom) {
+                    this.totalBottomTime += deltaTime;
+                    if (this.totalBottomTime >= this.cookTimeAutoToss) {
+                        return 'auto_toss';
+                    }
+                } else {
+                    this.totalTopTime += deltaTime;
+                    if (this.totalTopTime >= this.cookTimeAutoToss) {
+                        return 'auto_toss';
+                    }
+                }
+                
+                // Update colors
+                this.updateColors();
+                
+                // Update flash indicators
+                this.updateFlashIndicators();
+                
+                return null;
+            }
+            
+            updateColors() {
+                // Bottom color
+                if (this.totalBottomTime < this.cookTimePerfect) {
+                    const progress = this.totalBottomTime / this.cookTimePerfect;
+                    this.bottomColor = this.interpolateColor(COLORS.LIGHT_TAN, COLORS.GOLDEN_BROWN, progress);
+                } else if (this.totalBottomTime < this.cookTimeBurnt) {
+                    const progress = (this.totalBottomTime - this.cookTimePerfect) / (this.cookTimeBurnt - this.cookTimePerfect);
+                    this.bottomColor = this.interpolateColor(COLORS.GOLDEN_BROWN, COLORS.BURNT, progress);
+                } else {
+                    this.bottomColor = COLORS.BURNT;
+                }
+                
+                // Top color
+                if (this.totalTopTime < this.cookTimePerfect) {
+                    const progress = this.totalTopTime / this.cookTimePerfect;
+                    this.topColor = this.interpolateColor(COLORS.LIGHT_TAN, COLORS.GOLDEN_BROWN, progress);
+                } else if (this.totalTopTime < this.cookTimeBurnt) {
+                    const progress = (this.totalTopTime - this.cookTimePerfect) / (this.cookTimeBurnt - this.cookTimePerfect);
+                    this.topColor = this.interpolateColor(COLORS.GOLDEN_BROWN, COLORS.BURNT, progress);
+                } else {
+                    this.topColor = COLORS.BURNT;
+                }
+            }
+            
+            updateFlashIndicators() {
+                const currentTime = this.cookingBottom ? this.totalBottomTime : this.totalTopTime;
+                
+                // Check for perfect timing flash
+                if (Math.abs(currentTime - this.cookTimePerfect) < 0.1 && !this.wellCookedFlash) {
+                    this.wellCookedFlash = true;
+                    this.flashTimer = 0;
+                }
+                
+                // Check for burnt timing flash
+                if (Math.abs(currentTime - this.cookTimeBurnt) < 0.1 && !this.burntFlash) {
+                    this.burntFlash = true;
+                    this.flashTimer = 0;
+                }
+            }
+            
+            interpolateColor(color1, color2, t) {
+                t = Math.max(0, Math.min(1, t));
+                const c1 = this.hexToRgb(color1);
+                const c2 = this.hexToRgb(color2);
+                
+                const r = Math.round(c1.r + (c2.r - c1.r) * t);
+                const g = Math.round(c1.g + (c2.g - c1.g) * t);
+                const b = Math.round(c1.b + (c2.b - c1.b) * t);
+                
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            
+            hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : {r: 0, g: 0, b: 0};
+            }
+            
+            flip() {
+                this.cookingBottom = !this.cookingBottom;
+                this.flipped = !this.flipped;
+                this.wellCookedFlash = false;
+                this.burntFlash = false;
+                this.flashTimer = 0;
+                this.isAnimating = true;
+                this.flipAnimationTimer = 0;
+            }
+            
+            addTopping(topping) {
+                if (!this.toppings.includes(topping)) {
+                    this.toppings.push(topping);
+                }
+            }
+            
+            draw(ctx) {
+                // Animation effect
+                let drawX = this.x;
+                let drawY = this.y;
+                
+                if (this.isAnimating) {
+                    const bounceOffset = Math.floor(10 * Math.abs(2 * (this.flipAnimationTimer / 0.5) - 1));
+                    drawX = this.originalX + bounceOffset;
+                    drawY = this.originalY - bounceOffset;
+                }
+                
+                // Draw pancake layers
+                ctx.fillStyle = this.flipped ? this.topColor : this.bottomColor;
+                this.drawEllipse(ctx, drawX, drawY, this.width, this.height);
+                
+                ctx.fillStyle = this.flipped ? this.bottomColor : this.topColor;
+                this.drawEllipse(ctx, drawX, drawY - 8, this.width, this.height);
+                
+                // Draw toppings
+                this.drawToppings(ctx, drawX, drawY);
+                
+                // Draw flash indicators
+                this.drawFlashIndicators(ctx, drawX, drawY);
+            }
+            
+            drawEllipse(ctx, x, y, width, height) {
+                ctx.beginPath();
+                ctx.ellipse(x + width/2, y + height/2, width/2, height/2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            drawToppings(ctx, x, y) {
+                this.toppings.forEach((topping, i) => {
+                    const toppingX = x + 15 + i * 15;
+                    const toppingY = y - 6 + this.height / 2;
+                    
+                    ctx.beginPath();
+                    ctx.arc(toppingX, toppingY, topping === 'n' ? 5 : 4, 0, 2 * Math.PI);
+                    
+                    if (topping === 'b') ctx.fillStyle = COLORS.BLUE;
+                    else if (topping === 'n') ctx.fillStyle = COLORS.YELLOW;
+                    else if (topping === 'w') ctx.fillStyle = COLORS.BROWN;
+                    
+                    ctx.fill();
+                    ctx.strokeStyle = COLORS.WHITE;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            }
+            
+            drawFlashIndicators(ctx, x, y) {
+                if (this.wellCookedFlash && this.flashTimer < 2) {
+                    if (Math.floor(this.flashTimer * 4) % 2) {
+                        ctx.fillStyle = COLORS.GREEN;
+                        ctx.beginPath();
+                        ctx.arc(x + this.width/2, y - 12, 6, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                } else {
+                    this.wellCookedFlash = false;
+                }
+                
+                if (this.burntFlash) {
+                    if (this.flashTimer < 1) {
+                        if (Math.floor(this.flashTimer * 4) % 2) {
+                            ctx.fillStyle = COLORS.YELLOW;
+                            ctx.beginPath();
+                            ctx.arc(x + this.width/2, y - 12, 6, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                    } else if (this.flashTimer < 2) {
+                        if (Math.floor(this.flashTimer * 4) % 2) {
+                            ctx.fillStyle = COLORS.RED;
+                            ctx.beginPath();
+                            ctx.arc(x + this.width/2, y - 12, 6, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                    } else {
+                        this.burntFlash = false;
+                    }
+                }
+            }
+            
+            getScore(requiredToppings) {
+                let score = 0;
+                
+                // Score for cooking each side
+                if (this.cookTimePerfect <= this.totalBottomTime && this.totalBottomTime < this.cookTimeBurnt) {
+                    score += 5;
+                }
+                if (this.cookTimePerfect <= this.totalTopTime && this.totalTopTime < this.cookTimeBurnt) {
+                    score += 5;
+                }
+                
+                // Score for toppings
+                requiredToppings.forEach(topping => {
+                    if (this.toppings.includes(topping)) score += 1;
+                });
+                
+                // Penalty for wrong toppings
+                this.toppings.forEach(topping => {
+                    if (!requiredToppings.includes(topping)) score -= 2;
+                });
+                
+                return Math.max(0, score);
+            }
+        }
+        
+        // Order class
+        class Order {
+            constructor(speedLevel = 1, complexityLevel = 1) {
+                this.plates = [];
+                this.speedLevel = speedLevel;
+                this.complexityLevel = complexityLevel;
+                this.orderTimeLimit = 0;
+                this.startTime = Date.now();
+                this.generateRandomOrder();
+            }
+            
+            generateRandomOrder() {
+                this.plates = [];
+                
+                // Determine number of plates based on complexity (max 4 now)
+                let numPlates;
+                if (this.complexityLevel <= 2) numPlates = 1;
+                else if (this.complexityLevel <= 4) numPlates = Math.floor(Math.random() * 2) + 1;
+                else if (this.complexityLevel <= 6) numPlates = Math.floor(Math.random() * 2) + 2;
+                else if (this.complexityLevel <= 8) numPlates = Math.floor(Math.random() * 3) + 2;
+                else numPlates = Math.floor(Math.random() * 2) + 3; // 3-4 plates max
+                
+                let totalPancakes = 0;
+                
+                for (let plateNum = 0; plateNum < numPlates; plateNum++) {
+                    const plate = [];
+                    
+                    // Determine pancakes per plate
+                    let numPancakes;
+                    if (this.complexityLevel <= 2) numPancakes = Math.floor(Math.random() * 2) + 1;
+                    else if (this.complexityLevel <= 4) numPancakes = Math.floor(Math.random() * 3) + 1;
+                    else if (this.complexityLevel <= 6) numPancakes = Math.floor(Math.random() * 2) + 2;
+                    else if (this.complexityLevel <= 8) numPancakes = Math.floor(Math.random() * 3) + 2;
+                    else numPancakes = Math.floor(Math.random() * 3) + 3;
+                    
+                    totalPancakes += numPancakes;
+                    
+                    for (let i = 0; i < numPancakes; i++) {
+                        const toppings = [];
+                        const toppingChance = Math.min(0.1 + (this.complexityLevel - 1) * 0.06, 0.7);
+                        
+                        if (Math.random() < toppingChance) toppings.push('b');
+                        if (Math.random() < toppingChance) toppings.push('n');
+                        if (Math.random() < toppingChance) toppings.push('w');
+                        
+                        plate.push(toppings);
+                    }
+                    
+                    this.plates.push(plate);
+                }
+                
+                // Calculate time limit
+                const cookTime = CookingConfig.getCookTimePerfect(this.speedLevel);
+                const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
+                const timeMultiplier = Math.max(6 - (this.speedLevel - 1) * 0.4, 2);
+                this.orderTimeLimit = Math.floor(baseTime * timeMultiplier * 1000); // Convert to milliseconds
+            }
+            
+            getRemainingTime() {
+                const elapsed = Date.now() - this.startTime;
+                return Math.max(0, this.orderTimeLimit - elapsed);
+            }
+            
+            isTimeExpired() {
+                return this.getRemainingTime() <= 0;
+            }
+            
+            getOrderText() {
+                const orderText = [];
+                
+                this.plates.forEach((plate, i) => {
+                    let plateText = `Plate ${i + 1}: `;
+                    
+                    // Group pancakes by toppings
+                    const toppingGroups = {};
+                    plate.forEach(pancakeToppings => {
+                        const key = pancakeToppings.sort().join(',');
+                        toppingGroups[key] = (toppingGroups[key] || 0) + 1;
+                    });
+                    
+                    const descriptions = [];
+                    Object.entries(toppingGroups).forEach(([toppingsKey, count]) => {
+                        const toppings = toppingsKey ? toppingsKey.split(',') : [];
+                        
+                        let stackDesc;
+                        if (count === 1) stackDesc = "1 cake";
+                        else if (count === 2) stackDesc = "SS";
+                        else if (count === 3) stackDesc = "Stack";
+                        else stackDesc = `${count} cakes`;
+                        
+                        if (toppings.length === 0) {
+                            descriptions.push(stackDesc);
+                        } else {
+                            const toppingNames = [];
+                            if (toppings.includes('b')) toppingNames.push("blue");
+                            if (toppings.includes('n')) toppingNames.push("ban");
+                            if (toppings.includes('w')) toppingNames.push("wal");
+                            
+                            const toppingDesc = toppingNames.length === 3 ? "works" : toppingNames.join(" & ");
+                            descriptions.push(`${stackDesc} ${toppingDesc}`);
+                        }
+                    });
+                    
+                    plateText += descriptions.join(", ");
+                    orderText.push(plateText);
+                });
+                
+                return orderText;
+            }
+        }
+        
+        // Game state
+        let gameState = {
+            state: 'start', // 'start', 'playing', or 'paused'
+            grillSpots: Array(4).fill(null).map(() => Array(4).fill(null)),
+            selectedRow: 0,
+            selectedCol: 0,
+            speedLevel: 1,
+            complexityLevel: 1,
+            currentOrder: null,
+            plates: Array(4).fill(null).map(() => []), // Reduced to 4 plates
+            score: 0,
+            totalOrders: 0,
+            ordersFailed: 0,
+            perfectOrders: 0, // Track perfect orders for difficulty progression
+            outstandingFlash: false,
+            outstandingTimer: 0,
+            grillStartX: 150, // Moved right to make room for left controls
+            grillY: 140,
+            spotSize: 65,
+            spotSpacing: 5,
+            lastTime: 0,
+            pausedTime: 0 // Track time spent paused
+        };
+        
+        // Touch handling
+        let selectedGrillSpot = null;
+        
+        // Canvas touch handling
+        canvas.addEventListener('touchstart', handleCanvasTouch, {passive: false});
+        canvas.addEventListener('click', handleCanvasTouch);
+        
+        function handleCanvasTouch(e) {
+            e.preventDefault();
+            
+            if (gameState.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            let clientX, clientY;
+            if (e.touches && e.touches[0]) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+            
+            // Check if touch is on grill
+            const grillStartX = gameState.grillStartX;
+            const grillY = gameState.grillY;
+            const spotSize = gameState.spotSize;
+            const spotSpacing = gameState.spotSpacing;
+            
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const spotX = grillStartX + col * (spotSize + spotSpacing);
+                    const spotY = grillY + row * (spotSize + spotSpacing);
+                    
+                    if (x >= spotX && x <= spotX + spotSize && 
+                        y >= spotY && y <= spotY + spotSize) {
+                        // Select this grill spot
+                        gameState.selectedRow = row;
+                        gameState.selectedCol = col;
+                        selectedGrillSpot = {row, col};
+                        return;
+                    }
+                }
+            }
+            
+            // Check if touch is on plate areas (now clickable for interaction)
+            const platesY = 480; // Adjusted position
+            for (let plateNum = 0; plateNum < 4; plateNum++) { // Changed to 4 plates
+                const plateX = 50 + plateNum * 180; // Adjusted spacing for 4 plates
+                if (x >= plateX && x <= plateX + 170 && y >= platesY && y <= platesY + 100) {
+                    handlePlateClick(plateNum);
+                    return;
+                }
+            }
+        }
+        
+        function handlePlateClick(plateNum) {
+            const row = gameState.selectedRow;
+            const col = gameState.selectedCol;
+            const pancake = gameState.grillSpots[row][col];
+            
+            if (pancake) {
+                // Move pancake from grill to plate
+                pancake.finished = true;
+                pancake.wellCookedFlash = false;
+                pancake.burntFlash = false;
+                gameState.plates[plateNum].push(pancake);
+                gameState.grillSpots[row][col] = null;
+            } else if (gameState.plates[plateNum].length > 0) {
+                // Move last pancake from plate to grill (if grill spot is empty)
+                const movedPancake = gameState.plates[plateNum].pop();
+                movedPancake.finished = false;
+                
+                const newX = gameState.grillStartX + col * (gameState.spotSize + gameState.spotSpacing) + 
+                           (gameState.spotSize - movedPancake.width) / 2;
+                const newY = gameState.grillY + row * (gameState.spotSize + gameState.spotSpacing) + 
+                           (gameState.spotSize - movedPancake.height) / 2;
+                
+                movedPancake.x = newX;
+                movedPancake.y = newY;
+                movedPancake.originalX = newX;
+                movedPancake.originalY = newY;
+                
+                gameState.grillSpots[row][col] = movedPancake;
+            }
+        }
+        
+        function handleTouch(action) {
+            if (gameState.state !== 'playing') return;
+            
+            const row = gameState.selectedRow;
+            const col = gameState.selectedCol;
+            const pancake = gameState.grillSpots[row][col];
+            
+            switch (action) {
+                case 'pour':
+                    if (pancake === null) {
+                        // Pour batter
+                        const x = gameState.grillStartX + col * (gameState.spotSize + gameState.spotSpacing) + 10;
+                        const y = gameState.grillY + row * (gameState.spotSize + gameState.spotSpacing) + 20;
+                        gameState.grillSpots[row][col] = new Pancake(x, y, gameState.speedLevel);
+                    } else {
+                        // Flip pancake
+                        pancake.flip();
+                    }
+                    break;
+                    
+                case 'blueberry':
+                    if (pancake) pancake.addTopping('b');
+                    break;
+                    
+                case 'banana':
+                    if (pancake) pancake.addTopping('n');
+                    break;
+                    
+                case 'walnut':
+                    if (pancake) pancake.addTopping('w');
+                    break;
+                    
+                case 'toss':
+                    if (pancake) {
+                        gameState.grillSpots[row][col] = null;
+                        gameState.score -= 1;
+                    }
+                    break;
+                    
+                case 'send':
+                    sendOrder();
+                    break;
+                    
+                case 'pause':
+                    pauseGame();
+                    break;
+            }
+        }
+        
+        function pauseGame() {
+            if (gameState.state === 'playing') {
+                gameState.state = 'paused';
+                gameState.pausedTime = Date.now();
+                document.getElementById('pauseScreen').style.display = 'flex';
+            }
+        }
+        
+        function resumeGame() {
+            if (gameState.state === 'paused') {
+                gameState.state = 'playing';
+                
+                // Adjust order start time to account for pause duration
+                const pauseDuration = Date.now() - gameState.pausedTime;
+                gameState.currentOrder.startTime += pauseDuration;
+                
+                document.getElementById('pauseScreen').style.display = 'none';
+            }
+        }
+        
+        function returnToMenu() {
+            gameState.state = 'start';
+            document.getElementById('pauseScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'flex';
+            document.getElementById('leftControls').style.display = 'none';
+            document.getElementById('bottomControls').style.display = 'none';
+        }
+        
+        function sendOrder() {
+            const orderCompletionTime = (Date.now() - gameState.currentOrder.startTime) / 1000;
+            
+            // Calculate bonus threshold
+            const cookTime = CookingConfig.getCookTimePerfect(gameState.speedLevel);
+            const totalPancakes = gameState.currentOrder.plates.reduce((sum, plate) => sum + plate.length, 0);
+            const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
+            const timeBonusThreshold = baseTime * 1.5;
+            
+            let wasOutstanding = false;
+            
+            if (gameState.currentOrder.isTimeExpired()) {
+                // Time expired - failed order
+                gameState.ordersFailed++;
+                gameState.score -= 10;
+            } else {
+                // Order completed in time
+                const maxScore = calculateMaxPossibleScore();
+                const orderScore = scoreOrder();
+                
+                // Check if order was perfect
+                if (orderScore === maxScore && maxScore > 0) {
+                    gameState.outstandingFlash = true;
+                    gameState.outstandingTimer = 0;
+                    gameState.perfectOrders++;
+                    wasOutstanding = true;
+                }
+                
+                // Check for time bonus
+                if (orderCompletionTime < timeBonusThreshold) {
+                    gameState.score += orderScore; // 2x points bonus (already added once in scoreOrder)
+                }
+            }
+            
+            // Clear plates and generate new order with level progression
+            gameState.plates = Array(4).fill(null).map(() => []);
+            
+            // Only increase difficulty if the order was outstanding (perfect)
+            if (wasOutstanding) {
+                gameState.speedLevel = Math.min(gameState.speedLevel + Math.floor(gameState.perfectOrders / 2), 10);
+                gameState.complexityLevel = Math.min(gameState.complexityLevel + Math.floor(gameState.perfectOrders / 3), 10);
+            }
+            
+            gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+        }
+        
+        function calculateMaxPossibleScore() {
+            let maxScore = 0;
+            gameState.currentOrder.plates.forEach(plate => {
+                plate.forEach(pancakeToppings => {
+                    maxScore += 10; // 5 points per side
+                    maxScore += pancakeToppings.length; // 1 point per topping
+                });
+            });
+            return maxScore;
+        }
+        
+        function scoreOrder() {
+            let totalScore = 0;
+            
+            const filledPlates = gameState.plates.filter(plate => plate.length > 0);
+            if (filledPlates.length === 0 || gameState.currentOrder.plates.length === 0) {
+                return 0;
+            }
+            
+            const requiredPlates = [...gameState.currentOrder.plates];
+            const usedPlates = new Array(filledPlates.length).fill(false);
+            
+            requiredPlates.forEach(requiredPlate => {
+                let bestScore = -1;
+                let bestPlateIndex = -1;
+                
+                filledPlates.forEach((filledPlate, i) => {
+                    if (usedPlates[i]) return;
+                    
+                    const plateScore = calculatePlateScore(filledPlate, requiredPlate);
+                    if (plateScore > bestScore) {
+                        bestScore = plateScore;
+                        bestPlateIndex = i;
+                    }
+                });
+                
+                if (bestPlateIndex >= 0) {
+                    totalScore += bestScore;
+                    usedPlates[bestPlateIndex] = true;
+                }
+            });
+            
+            gameState.score += totalScore;
+            gameState.totalOrders++;
+            return totalScore;
+        }
+        
+        function calculatePlateScore(filledPlate, requiredPlate) {
+            if (filledPlate.length !== requiredPlate.length) {
+                return 0;
+            }
+            
+            let totalScore = 0;
+            const usedPancakes = new Array(filledPlate.length).fill(false);
+            
+            requiredPlate.forEach(requiredToppings => {
+                let bestMatchScore = -1;
+                let bestMatchIndex = -1;
+                
+                filledPlate.forEach((pancake, i) => {
+                    if (usedPancakes[i]) return;
+                    
+                    const score = pancake.getScore(requiredToppings);
+                    if (score > bestMatchScore) {
+                        bestMatchScore = score;
+                        bestMatchIndex = i;
+                    }
+                });
+                
+                if (bestMatchIndex >= 0) {
+                    totalScore += bestMatchScore;
+                    usedPancakes[bestMatchIndex] = true;
+                }
+            });
+            
+            return totalScore;
+        }
+        
+        function calculateCurrentOrderScore() {
+            const filledPlates = gameState.plates.filter(plate => plate.length > 0);
+            if (filledPlates.length === 0 || gameState.currentOrder.plates.length === 0) {
+                return 0;
+            }
+            
+            let currentScore = 0;
+            const requiredPlates = [...gameState.currentOrder.plates];
+            const usedPlates = new Array(filledPlates.length).fill(false);
+            
+            requiredPlates.forEach(requiredPlate => {
+                let bestScore = 0;
+                let bestPlateIndex = -1;
+                
+                filledPlates.forEach((filledPlate, i) => {
+                    if (usedPlates[i]) return;
+                    
+                    const plateScore = calculatePlateScore(filledPlate, requiredPlate);
+                    if (plateScore > bestScore) {
+                        bestScore = plateScore;
+                        bestPlateIndex = i;
+                    }
+                });
+                
+                if (bestPlateIndex >= 0) {
+                    currentScore += bestScore;
+                    usedPlates[bestPlateIndex] = true;
+                }
+            });
+            
+            return currentScore;
+        }
+        
+        // Start screen functions
+        function changeSpeed(delta) {
+            gameState.speedLevel = Math.max(1, Math.min(10, gameState.speedLevel + delta));
+            document.getElementById('speedLevel').textContent = gameState.speedLevel;
+        }
+        
+        function changeComplexity(delta) {
+            gameState.complexityLevel = Math.max(1, Math.min(10, gameState.complexityLevel + delta));
+            document.getElementById('complexityLevel').textContent = gameState.complexityLevel;
+        }
+        
+        function startGame() {
+            gameState.state = 'playing';
+            gameState.grillSpots = Array(4).fill(null).map(() => Array(4).fill(null));
+            gameState.plates = Array(4).fill(null).map(() => []); // Changed to 4 plates
+            gameState.score = 0;
+            gameState.totalOrders = 0;
+            gameState.ordersFailed = 0;
+            gameState.perfectOrders = 0;
+            gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+            
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('leftControls').style.display = 'flex';
+            document.getElementById('bottomControls').style.display = 'flex';
+        }
+        
+        // Game update loop
+        function update(currentTime) {
+            const deltaTime = (currentTime - gameState.lastTime) / 1000;
+            gameState.lastTime = currentTime;
+            
+            if (gameState.state === 'paused') {
+                requestAnimationFrame(update);
+                return;
+            }
+            
+            if (gameState.state !== 'playing') {
+                requestAnimationFrame(update);
+                return;
+            }
+            
+            // Check if order time expired
+            if (gameState.currentOrder.isTimeExpired()) {
+                gameState.ordersFailed++;
+                gameState.score -= 10;
+                gameState.plates = Array(4).fill(null).map(() => []); // Changed to 4 plates
+                // Don't increase difficulty on failure
+                gameState.currentOrder = new Order(gameState.speedLevel, gameState.complexityLevel);
+            }
+            
+            // Update outstanding flash
+            if (gameState.outstandingFlash) {
+                gameState.outstandingTimer += deltaTime;
+                if (gameState.outstandingTimer >= 3) {
+                    gameState.outstandingFlash = false;
+                    gameState.outstandingTimer = 0;
+                }
+            }
+            
+            // Update all pancakes
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const pancake = gameState.grillSpots[row][col];
+                    if (pancake) {
+                        const result = pancake.update(deltaTime);
+                        if (result === 'auto_toss') {
+                            gameState.grillSpots[row][col] = null;
+                            gameState.score -= 1;
+                        }
+                    }
+                }
+            }
+            
+            draw();
+            requestAnimationFrame(update);
+        }
+        
+        // Drawing functions
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = COLORS.BLACK;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (gameState.state === 'playing' || gameState.state === 'paused') {
+                drawGame();
+            }
+        }
+        
+        function drawGame() {
+            // Draw order at top
+            ctx.fillStyle = COLORS.WHITE;
+            ctx.font = '16px Arial';
+            const orderTexts = gameState.currentOrder.getOrderText();
+            orderTexts.forEach((orderText, i) => {
+                ctx.fillText(orderText, 10, 25 + i * 25);
+            });
+            
+            // Draw grill
+            drawGrill();
+            
+            // Draw pancakes on grill
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const pancake = gameState.grillSpots[row][col];
+                    if (pancake) {
+                        pancake.draw(ctx);
+                    }
+                }
+            }
+            
+            // Draw plates
+            drawPlates();
+            
+            // Draw UI
+            drawUI();
+            
+            // Draw outstanding flash
+            if (gameState.outstandingFlash && Math.floor(gameState.outstandingTimer * 6) % 2) {
+                ctx.fillStyle = COLORS.OUTSTANDING_GOLD;
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                
+                // Draw shadow
+                ctx.fillStyle = COLORS.BLACK;
+                ctx.fillText('OUTSTANDING!', canvas.width / 2 + 3, 103);
+                
+                // Draw main text
+                ctx.fillStyle = COLORS.OUTSTANDING_GOLD;
+                ctx.fillText('OUTSTANDING!', canvas.width / 2, 100);
+                
+                ctx.textAlign = 'left';
+            }
+        }
+        
+        function drawGrill() {
+            const grillStartX = gameState.grillStartX;
+            const grillY = gameState.grillY;
+            const spotSize = gameState.spotSize;
+            const spotSpacing = gameState.spotSpacing;
+            
+            const totalGrillWidth = 4 * spotSize + 3 * spotSpacing + 40;
+            const totalGrillHeight = 4 * spotSize + 3 * spotSpacing + 40;
+            const grillX = grillStartX - 20;
+            
+            // Draw grill base
+            ctx.fillStyle = COLORS.DARK_METAL;
+            ctx.fillRect(grillX, grillY - 10, totalGrillWidth, totalGrillHeight + 20);
+            
+            // Draw grill surface
+            ctx.fillStyle = COLORS.METAL_GRAY;
+            ctx.fillRect(grillX + 5, grillY - 5, totalGrillWidth - 10, totalGrillHeight + 10);
+            
+            // Draw grid lines
+            ctx.strokeStyle = COLORS.DARK_METAL;
+            ctx.lineWidth = 1;
+            
+            for (let i = 1; i < 4; i++) {
+                // Horizontal lines
+                const lineY = grillY + i * (spotSize + spotSpacing) - spotSpacing / 2;
+                ctx.beginPath();
+                ctx.moveTo(grillX + 10, lineY);
+                ctx.lineTo(grillX + totalGrillWidth - 10, lineY);
+                ctx.stroke();
+                
+                // Vertical lines
+                const lineX = grillStartX + i * (spotSize + spotSpacing) - spotSpacing / 2;
+                ctx.beginPath();
+                ctx.moveTo(lineX, grillY);
+                ctx.lineTo(lineX, grillY + totalGrillHeight - 20);
+                ctx.stroke();
+            }
+            
+            // Draw selection indicator
+            const selectedX = grillStartX + gameState.selectedCol * (spotSize + spotSpacing);
+            const selectedY = grillY + gameState.selectedRow * (spotSize + spotSpacing);
+            
+            ctx.strokeStyle = COLORS.GREEN;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(selectedX - 5, selectedY - 5, spotSize + 10, spotSize + 10);
+        }
+        
+        function drawPlates() {
+            const platesY = 480;
+            
+            ctx.fillStyle = COLORS.WHITE;
+            ctx.font = '14px Arial';
+            ctx.fillText('Plates (click to move pancakes):', 50, platesY - 15);
+            
+            for (let plateNum = 0; plateNum < 4; plateNum++) { // Changed to 4 plates
+                const plateX = 50 + plateNum * 180; // Adjusted spacing for 4 plates
+                
+                // Draw plate label
+                ctx.fillText(`Plate ${plateNum + 1}:`, plateX, platesY);
+                
+                // Draw plate background - highlight if clickable
+                ctx.strokeStyle = COLORS.GRAY;
+                const pancakeOnGrill = gameState.grillSpots[gameState.selectedRow][gameState.selectedCol];
+                const plateHasPancakes = gameState.plates[plateNum].length > 0;
+                
+                if (pancakeOnGrill || plateHasPancakes) {
+                    ctx.strokeStyle = COLORS.GREEN;
+                    ctx.lineWidth = 3;
+                } else {
+                    ctx.lineWidth = 2;
+                }
+                
+                ctx.strokeRect(plateX, platesY + 5, 170, 100); // Adjusted size for 4 plates
+                
+                // Draw pancakes on plate
+                gameState.plates[plateNum].forEach((pancake, i) => {
+                    pancake.x = plateX + 10 + (i % 4) * 30; // Adjusted for 4 plates
+                    pancake.y = platesY + 15 + Math.floor(i / 4) * 15;
+                    pancake.draw(ctx);
+                });
+            }
+        }
+        
+        function drawUI() {
+            const uiX = 600; // Moved right to accommodate grill repositioning
+            let uiY = 70;
+            
+            ctx.fillStyle = COLORS.WHITE;
+            ctx.font = '24px Arial';
+            ctx.fillText(`Score: ${gameState.score}`, uiX, uiY);
+            
+            uiY += 30;
+            ctx.font = '16px Arial';
+            const currentScore = calculateCurrentOrderScore();
+            const maxScore = calculateMaxPossibleScore();
+            ctx.fillText(`Order: ${currentScore}/${maxScore}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillText(`Orders: ${gameState.totalOrders}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillText(`Perfect: ${gameState.perfectOrders}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillText(`Speed: ${gameState.speedLevel}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillText(`Complex: ${gameState.complexityLevel}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillStyle = COLORS.RED;
+            ctx.fillText(`Failed: ${gameState.ordersFailed}`, uiX, uiY);
+            
+            // Draw time remaining
+            uiY += 30;
+            const timeRemaining = gameState.currentOrder.getRemainingTime() / 1000;
+            const orderCompletionTime = (Date.now() - gameState.currentOrder.startTime) / 1000;
+            
+            // Calculate bonus threshold
+            const cookTime = CookingConfig.getCookTimePerfect(gameState.speedLevel);
+            const totalPancakes = gameState.currentOrder.plates.reduce((sum, plate) => sum + plate.length, 0);
+            const baseTime = (totalPancakes * 3 + cookTime * 2) * (1 + totalPancakes / 16);
+            const timeBonusThreshold = baseTime * 1.5;
+            
+            let timeColor = COLORS.WHITE;
+            if (orderCompletionTime < timeBonusThreshold) {
+                timeColor = COLORS.GREEN;
+            } else if (timeRemaining < 30) {
+                timeColor = COLORS.RED;
+            }
+            
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = Math.floor(timeRemaining % 60);
+            
+            ctx.fillStyle = timeColor;
+            ctx.fillText(`Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`, uiX, uiY);
+            
+            uiY += 25;
+            ctx.fillStyle = COLORS.WHITE;
+            ctx.fillText(`Cook: ${CookingConfig.getCookTimePerfect(gameState.speedLevel).toFixed(1)}s`, uiX, uiY);
+        }
+        
+        // Initialize game
+        gameState.lastTime = performance.now();
+        requestAnimationFrame(update);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const newWidth = Math.min(1000, window.innerWidth);
+            const newHeight = Math.min(700, window.innerHeight);
+            
+            if (newWidth !== canvas.width || newHeight !== canvas.height) {
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+            }
+        });
+        
+        // Prevent scrolling on touch
+        document.body.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, {passive: false});
+        
+        // Prevent context menu on long press
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
