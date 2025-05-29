@@ -226,16 +226,16 @@
         </div>
         
         <div class="left-controls" id="leftControls" style="display: none;">
-            <button class="control-btn action" ontouchstart="handleTouch('pour')" onclick="handleTouch('pour')">Pour/Flip</button>
-            <button class="control-btn topping" ontouchstart="handleTouch('blueberry')" onclick="handleTouch('blueberry')">🫐 Blue</button>
-            <button class="control-btn topping" ontouchstart="handleTouch('banana')" onclick="handleTouch('banana')">🍌 Ban</button>
-            <button class="control-btn topping" ontouchstart="handleTouch('walnut')" onclick="handleTouch('walnut')">🥜 Wal</button>
-            <button class="control-btn danger" ontouchstart="handleTouch('toss')" onclick="handleTouch('toss')">Toss</button>
+            <button class="control-btn action" data-action="pour">Pour/Flip</button>
+            <button class="control-btn topping" data-action="blueberry">🫐 Blue</button>
+            <button class="control-btn topping" data-action="banana">🍌 Ban</button>
+            <button class="control-btn topping" data-action="walnut">🥜 Wal</button>
+            <button class="control-btn danger" data-action="toss">Toss</button>
         </div>
         
         <div class="bottom-controls" id="bottomControls" style="display: none;">
-            <button class="control-btn send" ontouchstart="handleTouch('send')" onclick="handleTouch('send')">Send Order</button>
-            <button class="control-btn pause" ontouchstart="handleTouch('pause')" onclick="handleTouch('pause')">Pause</button>
+            <button class="control-btn send" data-action="send">Send Order</button>
+            <button class="control-btn pause" data-action="pause">Pause</button>
         </div>
         
         <div class="plate-hint" id="plateHint">Click to move pancakes</div>
@@ -675,8 +675,49 @@
             pausedTime: 0 // Track time spent paused
         };
         
-        // Touch handling
-        let selectedGrillSpot = null;
+        // Touch handling for control buttons
+        let touchHandled = false;
+        
+        // Add event listeners for control buttons
+        function initializeControlButtons() {
+            const buttons = document.querySelectorAll('.control-btn[data-action]');
+            buttons.forEach(button => {
+                // Remove any existing listeners
+                button.removeEventListener('touchstart', handleButtonTouch);
+                button.removeEventListener('click', handleButtonClick);
+                
+                // Add new listeners
+                button.addEventListener('touchstart', handleButtonTouch, {passive: false});
+                button.addEventListener('click', handleButtonClick);
+            });
+        }
+        
+        function handleButtonTouch(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (!touchHandled) {
+                touchHandled = true;
+                const action = e.target.getAttribute('data-action') || e.target.closest('[data-action]').getAttribute('data-action');
+                handleTouch(action);
+                
+                // Reset the flag after a short delay
+                setTimeout(() => {
+                    touchHandled = false;
+                }, 100);
+            }
+        }
+        
+        function handleButtonClick(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Only handle click if it wasn't already handled by touch
+            if (!touchHandled) {
+                const action = e.target.getAttribute('data-action') || e.target.closest('[data-action]').getAttribute('data-action');
+                handleTouch(action);
+            }
+        }
         
         // Canvas touch handling
         canvas.addEventListener('touchstart', handleCanvasTouch, {passive: false});
@@ -1025,6 +1066,9 @@
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('leftControls').style.display = 'flex';
             document.getElementById('bottomControls').style.display = 'flex';
+            
+            // Initialize control button listeners
+            initializeControlButtons();
         }
         
         // Game update loop
