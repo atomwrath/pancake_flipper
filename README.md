@@ -15,3 +15,6 @@ A fun touch-based cooking game where you flip pancakes and fulfill orders!
 - Pause functionality
 - 4 serving plates
 - Multiple toppings (blueberry, banana, walnut)
+
+## Play Online
+[**🥞 Play Now!**](https://github.com/atomwrath/pancake_flipper/deployments/github-pages/)
